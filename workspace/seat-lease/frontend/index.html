@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>值班席位租约协调器</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<header class="topbar">
+  <div>
+    <h1>值班席位租约协调器</h1>
+    <p class="sub">带世代号（generation fencing）的席位租约 · 两阶段交班 · 双见证人紧急接管 · 请求指纹幂等 · WAL 崩溃恢复</p>
+  </div>
+  <div class="top-actions">
+    <span id="server-clock" class="clock">--:--:--</span>
+    <span id="wal-seq" class="badge">WAL seq -</span>
+    <button id="btn-snapshot" class="btn ghost" title="在当前世代打快照并压缩 WAL（验证重启恢复）">打快照</button>
+    <button id="btn-reset" class="btn danger">重置演示数据</button>
+  </div>
+</header>
+
+<main>
+  <!-- 模拟控制台 -->
+  <section class="panel wide">
+    <div class="panel-head">
+      <h2>🖥️ 模拟控制台（可同时开多个，模拟多控制台在线 / 断连 / 旧世代）</h2>
+      <button id="btn-add-console" class="btn">＋ 新增控制台</button>
+    </div>
+    <div id="consoles" class="console-grid"></div>
+  </section>
+
+  <div class="two-col">
+    <!-- 席位与租约 -->
+    <section class="panel">
+      <h2>🪑 席位与租约倒计时</h2>
+      <div id="seats"></div>
+    </section>
+
+    <!-- 待确认交接 -->
+    <section class="panel">
+      <h2>🤝 待确认交接（两阶段）</h2>
+      <div id="handovers"></div>
+    </section>
+  </div>
+
+  <div class="two-col">
+    <!-- 紧急接管 -->
+    <section class="panel">
+      <h2>🚨 紧急接管见证</h2>
+      <div id="takeovers"></div>
+    </section>
+
+    <!-- 管理：班次/人员/派座 -->
+    <section class="panel">
+      <h2>🧑‍💼 排班与人员</h2>
+      <details>
+        <summary class="muted">新建班次 / 初始派座 / 见证资格</summary>
+        <div class="admin-block">
+          <h3>建立班次（排班负责人）</h3>
+          <form id="form-shift" class="form">
+            <label>负责人 <select name="actor_id" data-people></select></label>
+            <label>班次名 <input name="name" placeholder="如：2026-10-05 夜班"></label>
+            <label>席位定义（每行：席位号,TTL毫秒,宽限毫秒）
+              <textarea name="seats_text" rows="3">NIGHT-1,15000,8000</textarea></label>
+            <button class="btn">建立班次</button>
+          </form>
+          <h3>初始派座（席位空缺时）</h3>
+          <form id="form-grant" class="form">
+            <label>席位 <select name="seat" data-seats></select></label>
+            <label>持有人 <select name="holder_id" data-people></select></label>
+            <button class="btn">派座</button>
+          </form>
+          <h3>见证资格</h3>
+          <div id="people-list" class="people-list"></div>
+        </div>
+      </details>
+      <div id="shifts" class="shifts"></div>
+    </section>
+  </div>
+
+  <div class="two-col">
+    <!-- 已接受写操作 -->
+    <section class="panel">
+      <h2>✅ 已接受写操作（不可回滚，<span id="effect-count">0</span>）</h2>
+      <div id="effects" class="log-list"></div>
+    </section>
+    <!-- 被围栏拒绝 -->
+    <section class="panel">
+      <h2>⛔ 被围栏 / 状态机拒绝的操作</h2>
+      <div id="denials" class="log-list"></div>
+    </section>
+  </div>
+
+  <section class="panel wide">
+    <h2>📜 WAL 事件流（最近 60 条，崩溃后逐条重放）</h2>
+    <div id="events" class="events"></div>
+  </section>
+</main>
+
+<template id="tpl-console">
+  <div class="console-card" data-console>
+    <div class="console-head">
+      <label class="grow">操作员
+        <select data-role="person" data-people></select>
+      </label>
+      <label class="switch"><input type="checkbox" data-role="online" checked> 在线</label>
+      <label class="switch"><input type="checkbox" data-role="autohb" checked> 自动心跳</label>
+      <button class="btn tiny ghost" data-role="remove">移除</button>
+    </div>
+    <div class="console-row">
+      <label class="grow">目标席位 <select data-role="seat" data-seats></select></label>
+      <label class="switch"><input type="checkbox" data-role="usegen"> 使用旧世代</label>
+      <span>世代 <b data-role="gen">-</b></span>
+      <span class="conn-dot" data-role="dot"></span>
+    </div>
+    <div class="console-row wrap">
+      <button class="btn" data-action="heartbeat">心跳续租</button>
+      <button class="btn" data-action="propose">发起交接 →</button>
+      <select data-role="successor" data-people></select>
+      <button class="btn" data-action="confirm">接班人确认</button>
+      <button class="btn warn" data-action="release">交出席位</button>
+      <button class="btn danger" data-action="start-takeover">发起紧急接管</button>
+      <button class="btn" data-action="attest">我来见证</button>
+      <button class="btn danger" data-action="finalize">夺取席位</button>
+    </div>
+    <div class="biz-box">
+      <div class="console-row">
+        <label class="grow">业务操作
+          <select data-role="op">
+            <option value="evacuation_publish">撤离方案发布</option>
+            <option value="convoy_dispatch">车队调度</option>
+            <option value="seal_review">封存审查</option>
+            <option value="generic_write">通用写操作</option>
+          </select>
+        </label>
+        <label class="grow">指纹 <input data-role="fp" placeholder="留空=自动生成"></label>
+      </div>
+      <textarea data-role="payload" rows="3">{
+  "order_id": "EVAC-ZONE-A-01",
+  "vehicles": ["V3", "V4"]
+}</textarea>
+      <div class="console-row wrap">
+        <button class="btn primary" data-action="write">执行写操作</button>
+        <button class="btn ghost" data-action="retry">完全相同重试</button>
+        <button class="btn ghost" data-action="reuse-fp">复用指纹但改内容（应拒绝）</button>
+      </div>
+      <div class="console-result" data-role="result"></div>
+    </div>
+  </div>
+</template>
+
+<script src="app.js"></script>
+</body>
+</html>

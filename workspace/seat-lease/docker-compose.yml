@@ -1,0 +1,23 @@
+services:
+  seat-lease:
+    build: .
+    image: seat-lease-coordinator:latest
+    container_name: seat-lease-coordinator
+    ports:
+      - "8092:8092"
+    volumes:
+      # WAL + 快照持久化：容器/进程重启（含崩溃）后世代、租约边界与请求判定完整恢复
+      - seatlease-data:/app/data
+    environment:
+      SEATLEASE_PORT: "8092"
+      # 设为 1 关闭启动时自动播种演示数据
+      SEATLEASE_NO_SEED: "0"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8092/api/health',timeout=3).status==200 else 1)"]
+      interval: 10s
+      timeout: 3s
+      retries: 6
+
+volumes:
+  seatlease-data:
