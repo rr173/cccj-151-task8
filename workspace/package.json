@@ -1,0 +1,15 @@
+{
+  "name": "duty-seat-lease-coordinator",
+  "version": "1.0.0",
+  "description": "值班席位租约协调器：带世代号的席位租约、协作交班、双人见证紧急接管、业务围栏与幂等判定",
+  "private": true,
+  "type": "commonjs",
+  "engines": { "node": ">=20" },
+  "scripts": {
+    "start": "node src/server.js",
+    "test": "node --test test/",
+    "demo": "node scripts/demo.js",
+    "seed": "node scripts/seed.js"
+  },
+  "license": "UNLICENSED"
+}

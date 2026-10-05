@@ -1,23 +1,23 @@
 services:
-  evac:
+  coordinator:
     build: .
-    image: evac-orchestrator:latest
-    container_name: evac-orchestrator
+    image: duty-seat-lease-coordinator:latest
+    container_name: duty-seat-coordinator
     ports:
       - "8080:8080"
     volumes:
-      # 持久化 SQLite：进程/容器重启后命令、出发记录与剩余容量完整恢复
-      - evac-data:/app/data
+      - seat-data:/app/data
     environment:
-      EVAC_PORT: "8080"
-      # 设为 1 可关闭启动时自动播种演示数据
-      EVAC_NO_SEED: "0"
+      # 演示环境开启崩溃/快进/重置工具；生产部署改为 0
+      ENABLE_DEV_TOOLS: "1"
+      SEED_ON_START: "1"
+      SEED_TTL_MS: "20000"
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "python3", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8080/api/state',timeout=3).status==200 else 1)"]
-      interval: 15s
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:8080/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 10s
       timeout: 3s
       retries: 5
 
 volumes:
-  evac-data:
+  seat-data:

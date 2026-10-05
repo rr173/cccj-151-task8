@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>值班席位租约协调器</title>
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <span class="logo">🛡️</span>
+      <div>
+        <h1>值班席位租约协调器</h1>
+        <div class="sub">世代围栏 · 协作交班 · 双人见证紧急接管 · 指纹幂等</div>
+      </div>
+    </div>
+    <div class="clockbox">
+      <div>服务端时间 <b id="server-clock">--:--:--</b></div>
+      <div class="dim">时钟偏移 <span id="clock-offset">0</span>ms · 事件序号 <span id="last-seq">-</span></div>
+      <div id="conn" class="conn">连接中…</div>
+    </div>
+  </header>
+
+  <section class="devbar">
+    <span class="tag">演示工具</span>
+    <button id="btn-ff">快进 +25 秒（模拟失联超时）</button>
+    <button id="btn-reset-clock">时钟归零</button>
+    <button id="btn-crash" class="warn">模拟进程崩溃（SIGKILL）</button>
+    <button id="btn-reset-data" class="warn">重置演示数据并重启世代</button>
+    <span class="dim">崩溃后由容器/进程管理器自动拉起，可验证世代与判定恢复</span>
+  </section>
+
+  <main class="layout">
+    <div class="col-main">
+      <section class="panel" id="panel-seats">
+        <div class="panel-h"><h2>席位与租约倒计时</h2><span class="dim" id="seats-hint"></span></div>
+        <div class="seats" id="seats"></div>
+      </section>
+
+      <section class="panel">
+        <div class="panel-h"><h2>待确认交接</h2></div>
+        <div id="handovers"></div>
+      </section>
+
+      <section class="panel">
+        <div class="panel-h"><h2>紧急接管见证</h2><span class="dim">需两名具备资格且互不相同的见证人，且原持有人失联达到门槛</span></div>
+        <div id="takeovers"></div>
+      </section>
+
+      <section class="panel">
+        <div class="panel-h"><h2>建立班次（排班负责人）</h2></div>
+        <div class="newshift">
+          <input id="ns-name" placeholder="班次名称，如 2026-10-06 早班" />
+          <input id="ns-seat" placeholder="席位名称，如 应急联络席" />
+          <select id="ns-kind">
+            <option value="evacuation">撤离方案发布</option>
+            <option value="convoy">车队调度</option>
+            <option value="sealing">封存审查</option>
+          </select>
+          <select id="ns-holder"></select>
+          <input id="ns-ttl" type="number" value="20000" title="租约 TTL（毫秒）" />
+          <button id="ns-create">建立班次</button>
+        </div>
+      </section>
+    </div>
+
+    <aside class="col-side">
+      <section class="panel console-panel">
+        <div class="panel-h"><h2>模拟控制台身份</h2></div>
+        <div class="dim">多开浏览器标签页并选择不同身份，即可模拟多个控制台同时在线。</div>
+        <div id="actor-picker" class="actor-picker"></div>
+        <div id="actor-card"></div>
+      </section>
+
+      <section class="panel">
+        <div class="panel-h"><h2>人员与见证资格</h2></div>
+        <div id="users"></div>
+      </section>
+
+      <section class="panel">
+        <div class="panel-h"><h2>被围栏拒绝的操作</h2></div>
+        <div id="denials"></div>
+      </section>
+
+      <section class="panel">
+        <div class="panel-h"><h2>已接受请求（原判定持久化）</h2></div>
+        <div id="accepted"></div>
+      </section>
+    </aside>
+  </main>
+
+  <div id="toast-wrap"></div>
+  <script src="/app.js"></script>
+</body>
+</html>

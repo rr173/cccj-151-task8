@@ -1,9 +1,6 @@
-__pycache__/
-*.pyc
+node_modules/
 data/
+*.log
 .git/
-tests/
-*.db
-*.db-wal
-*.db-shm
+_legacy_evac_scaffold/
 .DS_Store
